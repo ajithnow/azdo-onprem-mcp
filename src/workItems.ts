@@ -1,5 +1,4 @@
-import type { AxiosInstance } from "axios";
-import { devOpsApiVersion } from "./client.js";
+import { devOpsApiVersion, type AzureDevOpsClient } from "./client.js";
 
 /** Azure DevOps work item REST body from GET .../workitems/{id}?$expand=all */
 export type AzureWorkItem = Record<string, unknown>;
@@ -10,7 +9,7 @@ export function escapeWiqlString(s: string): string {
 }
 
 /** Team project root, e.g. https://host/Collection/Project — must match AZURE_BASE_URL. */
-function projectBaseUrl(client: AxiosInstance): string {
+function projectBaseUrl(client: AzureDevOpsClient): string {
   return String(client.defaults.baseURL ?? "").replace(/\/+$/, "");
 }
 
@@ -18,7 +17,7 @@ function projectBaseUrl(client: AxiosInstance): string {
  * Full work item JSON from GET .../workitems/{id}?$expand=all (id, rev, fields, relations, _links, ...).
  */
 export async function getWorkItem(
-  client: AxiosInstance,
+  client: AzureDevOpsClient,
   id: number
 ): Promise<AzureWorkItem> {
   const base = projectBaseUrl(client);
@@ -57,7 +56,7 @@ export interface WorkItemSearchRow {
 }
 
 async function fetchWorkItemsBatch(
-  client: AxiosInstance,
+  client: AzureDevOpsClient,
   ids: number[]
 ): Promise<Map<number, { title: unknown; state: unknown }>> {
   const map = new Map<number, { title: unknown; state: unknown }>();
@@ -87,7 +86,7 @@ async function fetchWorkItemsBatch(
 }
 
 export async function searchWorkItems(
-  client: AxiosInstance,
+  client: AzureDevOpsClient,
   query: string
 ): Promise<WorkItemSearchRow[]> {
   const trimmed = query.trim();

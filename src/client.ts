@@ -1,5 +1,3 @@
-import axios, { type AxiosError, type AxiosInstance } from "axios";
-
 function requireEnv(name: string): string {
   const v = process.env[name];
   if (!v || String(v).trim() === "") {
@@ -97,35 +95,14 @@ function errCodeSuffix(err: unknown): string {
   return "";
 }
 
-/**
- * Extract a readable message from an Axios error response.
- */
-export function formatAxiosError(err: unknown): string {
-  if (!axios.isAxiosError(err)) {
-    const msg =
-      err instanceof Error ? err.message || String(err) : String(err);
-    const code = errCodeSuffix(err);
-    if (
-      (err && typeof err === "object" && (err as { code?: string }).code === "ECONNABORTED") ||
-      /timeout/i.test(msg)
-    ) {
-      return `Request timed out${code}. Increase AZURE_HTTP_TIMEOUT_MS (default 120000) or check VPN/network.`;
-    }
-    return `${msg}${code}`;
-  }
-
-  if (!err.response) {
-    const code = err.code ? ` [${err.code}]` : "";
-    if (err.code === "ECONNABORTED" || /timeout/i.test(String(err.message))) {
-      return `Request timed out${code}. Increase AZURE_HTTP_TIMEOUT_MS (default 120000) or check VPN/network.`;
-    }
-    return `${err.message || String(err)}${code}`;
-  }
-
-  const { status, statusText, data } = err.response;
+function formatErrorResponse(
+  status: number,
+  statusText: string,
+  data: unknown,
+  headers: Headers
+): string {
   const base = `${status} ${statusText || ""}`.trim();
-  const wwwAuth = err.response.headers?.["www-authenticate"];
-
+  const wwwAuth = headers.get("www-authenticate");
   const detail = responseDetail(data);
 
   if (status === 401) {
@@ -143,6 +120,25 @@ export function formatAxiosError(err: unknown): string {
   return base;
 }
 
+/**
+ * Readable message for failed HTTP calls (used by {@link createAzureDevOpsClient}).
+ */
+export function formatRequestError(err: unknown): string {
+  const msg =
+    err instanceof Error ? err.message || String(err) : String(err);
+  const code = errCodeSuffix(err);
+  if (
+    (err &&
+      typeof err === "object" &&
+      (err as { code?: string }).code === "ECONNABORTED") ||
+    /timeout/i.test(msg) ||
+    (err instanceof Error && err.name === "AbortError")
+  ) {
+    return `Request timed out${code}. Increase AZURE_HTTP_TIMEOUT_MS (default 120000) or check VPN/network.`;
+  }
+  return `${msg}${code}`;
+}
+
 function httpTimeoutMs(): number {
   const raw = process.env.AZURE_HTTP_TIMEOUT_MS;
   if (raw == null || String(raw).trim() === "") {
@@ -152,65 +148,133 @@ function httpTimeoutMs(): number {
   return Number.isFinite(n) && n > 0 ? n : 120_000;
 }
 
-export function createAzureDevOpsClient(): AxiosInstance {
+function buildUrlWithParams(
+  url: string,
+  params?: Record<string, string | number | boolean | undefined>
+): string {
+  const u = new URL(url);
+  if (params) {
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined) {
+        u.searchParams.set(k, String(v));
+      }
+    }
+  }
+  return u.toString();
+}
+
+export interface AzureDevOpsClient {
+  readonly defaults: { baseURL: string };
+  get<T>(
+    url: string,
+    config?: {
+      params?: Record<string, string | number | boolean | undefined>;
+    }
+  ): Promise<{ data: T }>;
+  post<T>(
+    url: string,
+    body: unknown,
+    config?: {
+      params?: Record<string, string | number | boolean | undefined>;
+    }
+  ): Promise<{ data: T }>;
+}
+
+/**
+ * HTTP client for Azure DevOps REST APIs (Node 18+ native `fetch`).
+ * Avoids extra dependencies (e.g. axios → form-data → mime-db) that can break under `npx` on Windows.
+ */
+export function createAzureDevOpsClient(): AzureDevOpsClient {
   const baseURL = requireEnv("AZURE_BASE_URL").replace(/\/+$/, "");
   const pat = normalizePat(requireEnv("AZURE_PAT"));
-  const timeout = httpTimeoutMs();
+  const timeoutMs = httpTimeoutMs();
 
-  const client = axios.create({
-    baseURL,
-    timeout,
-    headers: {
-      Authorization: patAuthorizationHeader(pat),
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    validateStatus: (s) => s >= 200 && s < 300,
-    responseType: "json",
-  });
+  const authHeaders: Record<string, string> = {
+    Authorization: patAuthorizationHeader(pat),
+    Accept: "application/json",
+    "Content-Type": "application/json",
+  };
 
-  if (process.env.MCP_DEBUG === "1") {
-    client.interceptors.request.use((config) => {
-      const uri = client.getUri(config);
-      const h = config.headers;
-      const auth =
-        (typeof h.get === "function" ? h.get("Authorization") : null) ||
-        (h as { Authorization?: string }).Authorization ||
-        (h as { common?: { Authorization?: string } }).common?.Authorization;
-      console.error(`[MCP_DEBUG] ${config.method?.toUpperCase()} ${uri}`);
+  async function request<T>(
+    method: "GET" | "POST",
+    url: string,
+    options: {
+      params?: Record<string, string | number | boolean | undefined>;
+      body?: unknown;
+    } = {}
+  ): Promise<{ data: T }> {
+    const finalUrl = buildUrlWithParams(url, options.params);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const debug = process.env.MCP_DEBUG === "1";
+    const started = Date.now();
+
+    if (debug) {
+      console.error(`[MCP_DEBUG] ${method} ${finalUrl}`);
       console.error(
-        `[MCP_DEBUG] Authorization header: ${auth ? "present" : "MISSING (would get TF400813 / anonymous)"}`
+        `[MCP_DEBUG] Authorization header: ${authHeaders.Authorization ? "present" : "MISSING (would get TF400813 / anonymous)"}`
       );
       console.error(
-        `[MCP_DEBUG] timeout ${timeout}ms (set AZURE_HTTP_TIMEOUT_MS to change)`
+        `[MCP_DEBUG] timeout ${timeoutMs}ms (set AZURE_HTTP_TIMEOUT_MS to change)`
       );
-      config.mcpRequestStart = Date.now();
-      return config;
-    });
-    client.interceptors.response.use(
-      (res) => {
-        const started = res.config?.mcpRequestStart;
-        const ms = started != null ? Date.now() - started : null;
-        console.error(
-          `[MCP_DEBUG] ${res.status} in ${ms != null ? `${ms}ms` : "?ms"}`
-        );
-        return res;
-      },
-      (error: AxiosError) => {
-        const started = error.config?.mcpRequestStart;
-        const ms = started != null ? Date.now() - started : null;
-        console.error(
-          `[MCP_DEBUG] failed after ${ms != null ? `${ms}ms` : "?ms"}: ${error.message}`
-        );
-        return Promise.reject(error);
+    }
+
+    try {
+      const res = await fetch(finalUrl, {
+        method,
+        headers: authHeaders,
+        body:
+          options.body !== undefined
+            ? JSON.stringify(options.body)
+            : undefined,
+        signal: controller.signal,
+      });
+
+      const text = await res.text();
+      let data: unknown = undefined;
+      if (text.length > 0) {
+        const ct = res.headers.get("content-type") ?? "";
+        if (ct.includes("json")) {
+          try {
+            data = JSON.parse(text) as unknown;
+          } catch {
+            data = text;
+          }
+        } else {
+          data = text;
+        }
       }
-    );
+
+      if (debug) {
+        const ms = Date.now() - started;
+        console.error(`[MCP_DEBUG] ${res.status} in ${ms}ms`);
+      }
+
+      if (!res.ok) {
+        throw new Error(
+          formatErrorResponse(res.status, res.statusText, data, res.headers)
+        );
+      }
+
+      return { data: data as T };
+    } catch (err) {
+      if (debug) {
+        const ms = Date.now() - started;
+        const m = err instanceof Error ? err.message : String(err);
+        console.error(`[MCP_DEBUG] failed after ${ms}ms: ${m}`);
+      }
+      throw err instanceof Error
+        ? err
+        : new Error(formatRequestError(err));
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
-  client.interceptors.response.use(
-    (res) => res,
-    (err: unknown) => Promise.reject(new Error(formatAxiosError(err)))
-  );
-
-  return client;
+  return {
+    defaults: { baseURL },
+    get: (url, config) => request("GET", url, { params: config?.params }),
+    post: (url, body, config) =>
+      request("POST", url, { body, params: config?.params }),
+  };
 }

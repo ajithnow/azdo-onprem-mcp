@@ -63,6 +63,8 @@ Example `mcp.json` entry using the **published package** (`-y` lets `npx` instal
 
 Reload MCP / restart the editor after changing env.
 
+**Windows / `npx`:** From **v1.0.1**, HTTP calls use Node’s built-in **`fetch` only** (the **`axios` dependency was removed**). That avoids a known failure where `npx` pulled a broken tree and **`mime-db`** could not load **`db.json`**. If you still see strange missing-module errors, run `npm cache clean --force` and try again.
+
 ## Tools
 
 | Tool | Description |

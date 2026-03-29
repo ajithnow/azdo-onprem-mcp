@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { AxiosInstance } from "axios";
 import { z } from "zod";
+import type { AzureDevOpsClient } from "./client.js";
 import { listProjects } from "./projects.js";
 import type { AzureWorkItem } from "./workItems.js";
 import { getWorkItem, searchWorkItems } from "./workItems.js";
@@ -48,7 +48,10 @@ function workItemResult(item: AzureWorkItem) {
   };
 }
 
-export function registerTools(server: McpServer, client: AxiosInstance): void {
+export function registerTools(
+  server: McpServer,
+  client: AzureDevOpsClient
+): void {
   server.tool(
     "listProjects",
     "List team projects in the Azure DevOps collection. Uses AZURE_COLLECTION_URL if set, otherwise derives collection URL from AZURE_BASE_URL.",

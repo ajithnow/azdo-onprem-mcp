@@ -1,5 +1,8 @@
-import type { AxiosInstance } from "axios";
-import { devOpsApiVersion, resolveCollectionBaseUrl } from "./client.js";
+import {
+  devOpsApiVersion,
+  resolveCollectionBaseUrl,
+  type AzureDevOpsClient,
+} from "./client.js";
 
 export interface TeamProjectSummary {
   id: string;
@@ -24,7 +27,7 @@ interface ProjectsApiResponse {
  * Uses collection-scoped base URL; see resolveCollectionBaseUrl in client.ts.
  */
 export async function listProjects(
-  client: AxiosInstance
+  client: AzureDevOpsClient
 ): Promise<TeamProjectSummary[]> {
   const collectionBase = resolveCollectionBaseUrl();
   const url = `${collectionBase}/_apis/projects`;

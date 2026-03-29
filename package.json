@@ -1,6 +1,6 @@
 {
   "name": "azdo-onprem-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "MCP server for self-hosted Azure DevOps Server",
   "license": "MIT",
   "repository": {
@@ -37,7 +37,6 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.28.0",
-    "axios": "^1.7.9",
     "zod": "^3.25.0"
   },
   "devDependencies": {
