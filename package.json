@@ -1,6 +1,6 @@
 {
   "name": "azdo-onprem-mcp",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "MCP server for self-hosted Azure DevOps Server",
   "license": "MIT",
   "repository": {
