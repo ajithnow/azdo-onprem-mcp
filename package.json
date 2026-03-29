@@ -3,6 +3,14 @@
   "version": "1.0.0",
   "description": "MCP server for self-hosted Azure DevOps Server",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ajithnow/azdo-onprem-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ajithnow/azdo-onprem-mcp/issues"
+  },
+  "homepage": "https://github.com/ajithnow/azdo-onprem-mcp#readme",
   "keywords": [
     "mcp",
     "model-context-protocol",
@@ -12,7 +20,8 @@
   ],
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    ".env.example"
   ],
   "type": "module",
   "engines": {

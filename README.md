@@ -92,9 +92,14 @@ Source lives in `src/` (TypeScript); `npm run build` emits to `dist/`. With `AZU
 
 ## Publish to npm
 
-1. Set `"name"` in `package.json` to an **available** name (or use a scoped package `@your-scope/azdo-onprem-mcp`).
-2. Add `"license"`, `"repository"`, and `"author"` as you prefer.
-3. `npm login` and `npm publish` (consider `--access public` for scoped packages).
+From the repo root (with `npm login` if needed):
+
+```bash
+npm run build
+npm publish
+```
+
+`prepack` runs `npm run build` automatically, so `dist/` is always fresh in the tarball. For a **scoped** package name (e.g. `@your-scope/azdo-onprem-mcp`), use `npm publish --access public` the first time.
 
 ## License
 
