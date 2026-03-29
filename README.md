@@ -39,14 +39,14 @@ Do **not** commit secrets. Prefer Cursor/IDE env injection or your OS secret sto
 
 ## Cursor (or any MCP client)
 
-Example `mcp.json` entry:
+Example `mcp.json` entry using the **published package** (`-y` lets `npx` install or run without an interactive prompt, which MCP clients need):
 
 ```json
 {
   "mcpServers": {
     "azdo-onprem": {
-      "command": "node",
-      "args": ["/absolute/path/to/azure-org-mcp/dist/server.js"],
+      "command": "npx",
+      "args": ["-y", "azdo-onprem-mcp"],
       "env": {
         "AZURE_BASE_URL": "https://devops.example.com/Collection/MyProject",
         "AZURE_PAT": "<your-pat>"
@@ -56,7 +56,10 @@ Example `mcp.json` entry:
 }
 ```
 
-After installing from npm globally, you can point `command` at the binary if it is on your `PATH`, or keep using `node` with the path to `dist/server.js` from a cloned repo (run `npm run build` first).
+**Alternatives**
+
+- **Global install:** `"command": "azdo-onprem-mcp"` with no `args` (or an empty `args` array), if `npm install -g azdo-onprem-mcp` put the binary on your `PATH`.
+- **Local clone:** after `npm install` and `npm run build`, use `"command": "node"` and `"args": ["/absolute/path/to/azdo-onprem-mcp/dist/server.js"]` (adjust the path to your machine).
 
 Reload MCP / restart the editor after changing env.
 
